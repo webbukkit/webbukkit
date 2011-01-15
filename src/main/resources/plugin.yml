@@ -1,0 +1,3 @@
+name: webbukkit
+main: org.webbukkit.WebbukkitPlugin
+version: 0.1
