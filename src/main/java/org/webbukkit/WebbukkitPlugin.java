@@ -29,10 +29,6 @@ public class WebbukkitPlugin extends JavaPlugin {
     public WebbukkitPlugin() {
     }
 
-    @Override
-    public void onLoad() {
-    }
-
     public void registerHandler(Plugin plugin, String path, HttpHandler handler) {
         httpHandler.registerHandler(path, handler);
         
