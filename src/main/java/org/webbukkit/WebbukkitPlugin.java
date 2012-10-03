@@ -14,6 +14,7 @@ import org.bukkit.event.server.PluginDisableEvent;
 import org.bukkit.event.server.ServerListener;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.plugin.java.JavaPlugin;
+import org.webbukkit.handler.Cacheable;
 import org.webbukkit.http.HttpHandler;
 import org.webbukkit.http.server.HttpServer;
 
@@ -25,13 +26,14 @@ public class WebbukkitPlugin extends JavaPlugin {
     HttpPathDelegator httpHandler = new HttpPathDelegator();
     HashMap<Plugin, PluginRegistration> pluginRegistrations = new HashMap<Plugin, PluginRegistration>();
     HashMap<HttpHandler, PluginRegistration> handlerRegistrations = new HashMap<HttpHandler, PluginRegistration>();
-    
-    public WebbukkitPlugin() {
-    }
+    private CacheReaper cacheReaper = new CacheReaper();
+
+    public WebbukkitPlugin() {}
 
     public void registerHandler(Plugin plugin, String path, HttpHandler handler) {
         httpHandler.registerHandler(path, handler);
-        
+        if (handler instanceof Cacheable)
+            cacheReaper.addCacheable((Cacheable)handler);
         PluginRegistration registration = pluginRegistrations.get(plugin);
         
         if (registration == null) {
@@ -41,8 +43,10 @@ public class WebbukkitPlugin extends JavaPlugin {
         handlerRegistrations.put(handler, registration);
         registration.handlers.add(handler);
     }
-    
+
     public void unregisterHandler(HttpHandler handler) {
+        if (handler instanceof Cacheable)
+            cacheReaper.removeCacheable((Cacheable)handler);
         httpHandler.unregisterHandler(handler);
         PluginRegistration registration = handlerRegistrations.remove(handler);
         if (registration != null) {
@@ -52,7 +56,7 @@ public class WebbukkitPlugin extends JavaPlugin {
             }
         }
     }
-    
+
     public void unregisterHandlers(Plugin plugin) {
         PluginRegistration registration = pluginRegistrations.remove(plugin);
         if (registration != null) {
@@ -62,7 +66,7 @@ public class WebbukkitPlugin extends JavaPlugin {
             }
         }
     }
-    
+
     @Override
     public void onEnable() {
         String bindAddressString = getConfiguration().getString("bindaddress", "0.0.0.0");
@@ -71,8 +75,7 @@ public class WebbukkitPlugin extends JavaPlugin {
             bindAddress = bindAddressString.equals("0.0.0.0")
                     ? null
                     : InetAddress.getByName(bindAddressString);
-        } catch (UnknownHostException e) {
-        }
+        } catch (UnknownHostException e) {}
         int port = getConfiguration().getInt("port", 80);
         httpServer = new HttpServer(bindAddress, port, httpHandler);
         try {
@@ -82,6 +85,7 @@ public class WebbukkitPlugin extends JavaPlugin {
         }
         
         registerEvents();
+        getServer().getScheduler().scheduleAsyncRepeatingTask(this, cacheReaper, 6000, 6000);
     }
 
     @Override
@@ -91,7 +95,7 @@ public class WebbukkitPlugin extends JavaPlugin {
             httpServer = null;
         }
     }
-    
+
     private void registerEvents() {
         getServer().getPluginManager().registerEvent(Event.Type.PLUGIN_DISABLE, new ServerListener() {
             @Override
@@ -100,11 +104,11 @@ public class WebbukkitPlugin extends JavaPlugin {
             }
         }, Priority.Monitor, this);
     }
-    
+
     private static class PluginRegistration {
         public Plugin plugin;
         public Set<HttpHandler> handlers = new HashSet<HttpHandler>();
-        
+
         public PluginRegistration(Plugin plugin) {
             this.plugin = plugin;
         }
